@@ -2,12 +2,17 @@
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import CalendarMonth from '@/components/CalendarMonth.astro';
 import { dayjs } from '@/lib/utils/date';
+import { monthGrid } from '@/lib/utils/date';
 const now = dayjs();
 const y = Number(Astro.url.searchParams.get('y') ?? now.year());
 const m0 = Number(Astro.url.searchParams.get('m') ?? now.month());
 
 const monthKey = dayjs().year(y).month(m0).format('YYYY-MM');
-const res = await fetch(`${Astro.url.origin}/api/appointments?month=${monthKey}`);
+const grid = monthGrid(y, m0);
+const rangeStart = grid[0];
+const rangeEnd = grid[grid.length - 1];
+const queryParams = rangeStart && rangeEnd ? `start=${rangeStart}&end=${rangeEnd}` : `month=${monthKey}`;
+const res = await fetch(`${Astro.url.origin}/api/appointments?${queryParams}`);
 const counts = res.ok ? await res.json() : [];
 ---
 <BaseLayout title="Calendario mensual">

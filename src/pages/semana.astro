@@ -6,15 +6,18 @@ import { dayjs } from '@/lib/utils/date';
 const d = Astro.url.searchParams.get('d') ?? dayjs().format('YYYY-MM-DD');
 
 // Fetch week counts and per-day appointments
-const start = dayjs(d).weekday(1).format('YYYY-MM-DD');
-const end = dayjs(d).weekday(5).format('YYYY-MM-DD');
+const base = dayjs(d);
+const dow = base.day();
+const startDay = dow === 0 ? base.subtract(6, 'day') : base.subtract(dow - 1, 'day');
+const start = startDay.format('YYYY-MM-DD');
+const end = startDay.add(4, 'day').format('YYYY-MM-DD');
 
 async function getDay(date: string) {
   const r = await fetch(`${Astro.url.origin}/api/appointments?day=${date}`);
   return r.ok ? await r.json() : [];
 }
 
-const days = [0,1,2,3,4].map((i) => dayjs(start).add(i, 'day').format('YYYY-MM-DD'));
+const days = [0, 1, 2, 3, 4].map((i) => dayjs(start).add(i, 'day').format('YYYY-MM-DD'));
 const data: Record<string, any[]> = {};
 for (const day of days) {
   data[day] = await getDay(day);

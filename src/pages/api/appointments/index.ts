@@ -9,6 +9,16 @@ export const GET: APIRoute = async ({ request }) => {
   const month = url.searchParams.get('month'); // YYYY-MM
   const week = url.searchParams.get('week'); // YYYY-MM-DD within week
   const day = url.searchParams.get('day'); // YYYY-MM-DD
+  const start = url.searchParams.get('start');
+  const end = url.searchParams.get('end');
+
+  if (start && end) {
+    const rows = await db.execute({
+      sql: 'SELECT date, COUNT(*) as count FROM appointments WHERE date BETWEEN ? AND ? GROUP BY date',
+      args: [start, end],
+    });
+    return new Response(JSON.stringify(rows.rows), { status: 200 });
+  }
 
   if (day) {
     const rows = await db.execute({
@@ -65,5 +75,6 @@ export const POST: APIRoute = async ({ request }) => {
     args: [date, name, phone ?? null, notes ?? null],
   });
 
-  return new Response(JSON.stringify({ id: res.lastInsertRowid }), { status: 201 });
+  const id = res.lastInsertRowid !== undefined ? Number(res.lastInsertRowid) : null;
+  return new Response(JSON.stringify({ id }), { status: 201 });
 };
