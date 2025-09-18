@@ -34,7 +34,7 @@ npm install
 bun install
 ```
 
-3) Ejecuta la migración (crea la base de datos local en `.data/db.sqlite`):
+3) Ejecuta la migración (crea la base de datos local en `.data/db.sqlite` o inicializa tu instancia de Turso manualmente):
 - Con npm:
 ```
 npm run migrate
@@ -43,6 +43,8 @@ npm run migrate
 ```
 bun run scripts/migrate.ts
 ```
+
+   - Si usas Turso, exporta `TURSO_DATABASE_URL` y `TURSO_AUTH_TOKEN` y ejecuta este script una única vez contra la instancia remota para crear la tabla e índice.
 
 4) Arranca el entorno de desarrollo:
 - Con npm:

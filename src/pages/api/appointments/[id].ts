@@ -1,10 +1,11 @@
 import type { APIRoute } from 'astro';
-import { getDb } from '@/lib/db';
+import { ensureSchema, getDb } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 
 export const PUT: APIRoute = async ({ params, request }) => {
   const authRes = await requireAuth(request);
   if (authRes) return authRes;
+  await ensureSchema();
   const db = getDb();
   const id = Number(params.id);
   const body = await request.json();
@@ -21,6 +22,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
 export const DELETE: APIRoute = async ({ params, request }) => {
   const authRes = await requireAuth(request);
   if (authRes) return authRes;
+  await ensureSchema();
   const db = getDb();
   const id = Number(params.id);
   const res = await db.execute({ sql: 'DELETE FROM appointments WHERE id = ?', args: [id] });
