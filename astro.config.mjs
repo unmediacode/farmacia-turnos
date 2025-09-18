@@ -7,9 +7,7 @@ import vercel from "@astrojs/vercel/serverless";
 /** @type {import('astro').AstroUserConfig} */
 export default {
   output: "server",
-  adapter: vercel({
-    runtime: "nodejs20.x"
-  }),
+  adapter: vercel(),
   integrations: [tailwind({
     applyBaseStyles: true,
   })],
