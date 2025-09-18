@@ -1,79 +1,182 @@
 ---
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import CalendarWeek from '@/components/CalendarWeek.astro';
-import { dayjs } from '@/lib/utils/date';
+import type { Appointment } from '@/lib/types';
+import {
+  buildRemainingWorkWeeks,
+  buildWorkWeek,
+  dayjs,
+  formatHuman
+} from '@/lib/utils/date';
+import weekModalScript from '../scripts/week-modal.ts?url';
 
-const d = Astro.url.searchParams.get('d') ?? dayjs().format('YYYY-MM-DD');
+const selectedDate = Astro.url.searchParams.get('d') ?? dayjs().format('YYYY-MM-DD');
+const workWeek = buildWorkWeek(selectedDate);
+const remainingWeeks = buildRemainingWorkWeeks(selectedDate);
+const weeksToRender = remainingWeeks.length > 0 ? remainingWeeks : [workWeek];
 
-// Fetch week counts and per-day appointments
-const base = dayjs(d);
-const dow = base.day();
-const startDay = dow === 0 ? base.subtract(6, 'day') : base.subtract(dow - 1, 'day');
-const start = startDay.format('YYYY-MM-DD');
-const end = startDay.add(4, 'day').format('YYYY-MM-DD');
-
-async function getDay(date: string) {
-  const r = await fetch(`${Astro.url.origin}/api/appointments?day=${date}`);
-  return r.ok ? await r.json() : [];
+async function fetchDay(date: string): Promise<Appointment[]> {
+  const endpoint = new URL(`/api/appointments`, Astro.url.origin);
+  endpoint.searchParams.set('day', date);
+  const response = await fetch(endpoint, { headers: { accept: 'application/json' }, cache: 'no-store' });
+  if (!response.ok) return [];
+  return (await response.json()) as Appointment[];
 }
 
-const days = [0, 1, 2, 3, 4].map((i) => dayjs(start).add(i, 'day').format('YYYY-MM-DD'));
-const data: Record<string, any[]> = {};
-for (const day of days) {
-  data[day] = await getDay(day);
-}
+const uniqueDays = Array.from(new Set(weeksToRender.flat()));
+const appointmentsEntries = await Promise.all(
+  uniqueDays.map(async (date) => [date, await fetchDay(date)] as const)
+);
+const appointmentsByDay = Object.fromEntries(appointmentsEntries) as Record<string, Appointment[]>;
+
+type WeekBundle = {
+  dates: string[];
+  start: string;
+  end: string;
+  data: Record<string, Appointment[]>;
+};
+
+const weekBundles: WeekBundle[] = weeksToRender.map((weekDates) => {
+  const data = Object.fromEntries(
+    weekDates.map((date) => [date, appointmentsByDay[date] ?? []])
+  ) as Record<string, Appointment[]>;
+  return {
+    dates: weekDates,
+    start: weekDates[0],
+    end: weekDates[weekDates.length - 1],
+    data
+  };
+});
+
+const weekStart = weekBundles[0]?.start ?? workWeek[0];
+const weekEnd = weekBundles.at(-1)?.end ?? workWeek[workWeek.length - 1];
+const previousWeek = dayjs(weekStart).subtract(7, 'day').format('YYYY-MM-DD');
+const nextWeek = dayjs(weekStart).add(7, 'day').format('YYYY-MM-DD');
+const monthLabel = dayjs(selectedDate).startOf('month').format('MMMM YYYY');
 ---
 <BaseLayout title="Calendario semanal">
-  <div class="flex items-center justify-between mb-4">
-    <div class="text-2xl font-bold print:text-base">Semana de {dayjs(start).format('DD/MM/YYYY')}</div>
-    <div class="flex gap-2 print:hidden">
-      <a class="btn-outline" href={`/semana?d=${dayjs(d).subtract(7, 'day').format('YYYY-MM-DD')}`}>Anterior</a>
-      <a class="btn-outline" href={`/semana?d=${dayjs(d).add(7, 'day').format('YYYY-MM-DD')}`}>Siguiente</a>
+  <div class="mb-4 flex items-center justify-between print:mb-2">
+    <div>
+      <h1 class="text-2xl font-bold print:text-base">Semanas restantes de {monthLabel}</h1>
+      <p class="text-sm text-slate-500">
+        Del {formatHuman(weekStart)} al {formatHuman(weekEnd)}
+      </p>
     </div>
+    <nav class="flex gap-2 print:hidden" aria-label="Cambiar semana">
+      <a class="btn-outline" href={`/semana?d=${previousWeek}`}>Anterior</a>
+      <a class="btn-outline" href={`/semana?d=${nextWeek}`}>Siguiente</a>
+    </nav>
   </div>
-  <CalendarWeek dateKey={d} data={data} />
 
-  <div id="appointment-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
-    <div class="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl dark:bg-slate-900" role="dialog" aria-modal="true">
-      <form id="appointment-form" class="flex flex-col gap-4">
+  <div class="space-y-8">
+    {weekBundles.map((week) => (
+      <section class="space-y-3" aria-label={`Semana del ${formatHuman(week.start)} al ${formatHuman(week.end)}`}>
+        <header class="flex items-center justify-between">
+          <h2 class="text-lg font-semibold">
+            Semana del {formatHuman(week.start)} al {formatHuman(week.end)}
+          </h2>
+          <span class="text-sm text-slate-500">{week.dates.length} días laborables</span>
+        </header>
+        <CalendarWeek dateKey={week.start} data={week.data} />
+      </section>
+    ))}
+  </div>
+
+  <div
+    id="appointment-modal"
+    class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="appointment-modal-title"
+  >
+    <div class="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl dark:bg-slate-900">
+      <form id="appointment-form" class="flex flex-col gap-4" novalidate>
         <div class="flex items-center justify-between">
-          <h2 class="text-lg font-semibold">Añadir cliente</h2>
+          <h2 id="appointment-modal-title" class="text-lg font-semibold">Añadir cliente</h2>
           <button type="button" class="btn-icon" data-cancel aria-label="Cerrar">
-            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
               <path d="M5 5l10 10" />
               <path d="M15 5l-10 10" />
             </svg>
-            <span class="sr-only">Cerrar</span>
           </button>
         </div>
+
         <div class="grid gap-3">
-          <label class="flex flex-col gap-1 text-sm">
+          <label class="flex flex-col gap-1 text-sm" for="name-input">
             <span>Nombre *</span>
-            <input name="name" required type="text" placeholder="Nombre del cliente" class="rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-800" />
+            <input
+              id="name-input"
+              name="name"
+              required
+              type="text"
+              inputmode="text"
+              autocomplete="name"
+              placeholder="Nombre del cliente"
+              class="rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-800"
+            />
           </label>
-          <label class="flex flex-col gap-1 text-sm">
+
+          <label class="flex flex-col gap-1 text-sm" for="phone-input">
             <span>Teléfono</span>
-            <input name="phone" type="text" placeholder="Teléfono (opcional)" class="rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-800" />
+            <input
+              id="phone-input"
+              name="phone"
+              type="tel"
+              inputmode="tel"
+              autocomplete="tel"
+              placeholder="Teléfono (opcional)"
+              class="rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-800"
+            />
           </label>
-          <label class="flex flex-col gap-1 text-sm">
+
+          <label class="flex flex-col gap-1 text-sm" for="notes-input">
             <span>Notas</span>
-            <textarea name="notes" rows="2" placeholder="Notas (opcional)" class="rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-800"></textarea>
+            <textarea
+              id="notes-input"
+              name="notes"
+              rows="2"
+              placeholder="Notas (opcional)"
+              class="rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-800"
+            ></textarea>
           </label>
         </div>
+
         <div class="rounded-lg border border-slate-200 p-3 dark:border-slate-700">
           <div class="mb-2 flex items-center justify-between">
             <button type="button" class="btn-icon" data-cal-prev aria-label="Mes anterior">
-              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
                 <path d="M12 5l-5 5 5 5" />
               </svg>
-              <span class="sr-only">Mes anterior</span>
             </button>
             <div class="text-sm font-medium capitalize" data-cal-title></div>
             <button type="button" class="btn-icon" data-cal-next aria-label="Mes siguiente">
-              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
                 <path d="M8 5l5 5-5 5" />
               </svg>
-              <span class="sr-only">Mes siguiente</span>
             </button>
           </div>
           <div class="grid grid-cols-7 text-center text-xs font-medium text-slate-500 dark:text-slate-400">
@@ -88,7 +191,8 @@ for (const day of days) {
           <div class="mt-2 grid grid-cols-7 gap-1" data-calendar-grid></div>
           <div class="mt-3 text-xs text-slate-600 dark:text-slate-300" data-selected-info></div>
         </div>
-        <p class="hidden text-sm text-red-600" data-form-error></p>
+
+        <p class="hidden text-sm text-red-600" data-form-error role="alert"></p>
         <div class="flex justify-end gap-2">
           <button type="button" class="btn-outline" data-cancel>Cancelar</button>
           <button type="submit" class="btn" data-submit>Guardar</button>
@@ -97,244 +201,9 @@ for (const day of days) {
     </div>
   </div>
 
-  <script>
-    const modal = document.getElementById('appointment-modal');
-    const form = document.getElementById('appointment-form');
-    const nameInput = form.querySelector('[name="name"]');
-    const phoneInput = form.querySelector('[name="phone"]');
-    const notesInput = form.querySelector('[name="notes"]');
-    const submitBtn = form.querySelector('[data-submit]');
-    const errorEl = form.querySelector('[data-form-error]');
-    const selectedInfo = form.querySelector('[data-selected-info]');
-    const monthTitle = form.querySelector('[data-cal-title]');
-    const calendarGrid = form.querySelector('[data-calendar-grid]');
-    const cancelButtons = form.querySelectorAll('[data-cancel]');
-    const monthFormatter = new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' });
-    const dayFormatter = new Intl.DateTimeFormat('es-ES', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
-
-    let selectedDates = new Set();
-    let calendarMonth = null;
-
-    function parseDate(value) {
-      const [year, month, day] = value.split('-').map(Number);
-      return new Date(year, month - 1, day);
-    }
-
-    function formatDate(date) {
-      const y = date.getFullYear();
-      const m = String(date.getMonth() + 1).padStart(2, '0');
-      const d = String(date.getDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
-    }
-
-    function isWeekend(date) {
-      const dow = date.getDay();
-      return dow === 0 || dow === 6;
-    }
-
-    function clearError() {
-      errorEl.textContent = '';
-      errorEl.classList.add('hidden');
-    }
-
-    function showError(message) {
-      errorEl.textContent = message;
-      errorEl.classList.remove('hidden');
-    }
-
-    function updateSelectedInfo() {
-      if (selectedDates.size === 0) {
-        selectedInfo.textContent = 'Selecciona uno o varios días laborales.';
-        return;
-      }
-      const list = Array.from(selectedDates)
-        .sort()
-        .map((date) => dayFormatter.format(parseDate(date)));
-      selectedInfo.textContent = `Fechas seleccionadas: ${list.join(', ')}`;
-    }
-
-    function renderCalendar() {
-      if (!calendarMonth) return;
-      const monthStart = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
-      const startOffset = (monthStart.getDay() + 6) % 7;
-      const gridStart = new Date(monthStart);
-      gridStart.setDate(monthStart.getDate() - startOffset);
-      calendarGrid.innerHTML = '';
-
-      for (let i = 0; i < 42; i++) {
-        const current = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i);
-        const dateKey = formatDate(current);
-        const inMonth = current.getMonth() === calendarMonth.getMonth();
-        const weekend = isWeekend(current);
-        const isSelected = selectedDates.has(dateKey);
-
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.dataset.day = dateKey;
-        button.textContent = String(current.getDate());
-        button.className = `w-full aspect-square rounded text-sm transition ${inMonth ? '' : 'text-slate-400 dark:text-slate-600'} ${weekend ? 'cursor-not-allowed opacity-40' : 'hover:bg-slate-100 dark:hover:bg-slate-800'}`;
-
-        if (weekend) {
-          button.disabled = true;
-        }
-
-        if (isSelected) {
-          button.classList.add('bg-brand-600', 'text-white', 'hover:bg-brand-600');
-        } else {
-          button.classList.add('border', 'border-transparent');
-        }
-
-        calendarGrid.appendChild(button);
-      }
-
-      monthTitle.textContent = monthFormatter.format(calendarMonth);
-      updateSelectedInfo();
-    }
-
-    function openModal(initialDate) {
-      if (!initialDate) return;
-      form.reset();
-      clearError();
-      selectedDates = new Set([initialDate]);
-      calendarMonth = parseDate(initialDate);
-      calendarMonth.setDate(1);
-      renderCalendar();
-      modal.classList.add('flex');
-      modal.classList.remove('hidden');
-      nameInput.focus();
-    }
-
-    function closeModal() {
-      modal.classList.add('hidden');
-      modal.classList.remove('flex');
-      selectedDates.clear();
-    }
-
-    function toggleDate(date) {
-      if (!date) return;
-      if (selectedDates.has(date)) {
-        selectedDates.delete(date);
-      } else {
-        selectedDates.add(date);
-      }
-      renderCalendar();
-    }
-
-    calendarGrid.addEventListener('click', (event) => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      const dayButton = target.closest('button[data-day]');
-      if (!(dayButton instanceof HTMLButtonElement) || dayButton.disabled) return;
-      toggleDate(dayButton.dataset.day);
-    });
-
-    form.querySelector('[data-cal-prev]').addEventListener('click', () => {
-      if (!calendarMonth) return;
-      calendarMonth.setMonth(calendarMonth.getMonth() - 1);
-      renderCalendar();
-    });
-
-    form.querySelector('[data-cal-next]').addEventListener('click', () => {
-      if (!calendarMonth) return;
-      calendarMonth.setMonth(calendarMonth.getMonth() + 1);
-      renderCalendar();
-    });
-
-    cancelButtons.forEach((btn) => btn.addEventListener('click', () => closeModal()));
-
-    modal.addEventListener('click', (event) => {
-      if (event.target === modal) closeModal();
-    });
-
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && !modal.classList.contains('hidden')) {
-        closeModal();
-      }
-    });
-
-    async function create(date) {
-      if (!date) return;
-      openModal(date);
-    }
-
-    async function update(id) {
-      if (!id) return;
-      const name = prompt('Nuevo nombre (dejar vacío para no cambiar):') || undefined;
-      const phone = prompt('Nuevo teléfono (opcional):') || undefined;
-      const notes = prompt('Nuevas notas (opcional):') || undefined;
-      const r = await fetch(`/api/appointments/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, phone, notes })});
-      if (!r.ok) alert('Error al actualizar');
-      location.reload();
-    }
-
-    async function remove(id) {
-      if (!id) return;
-      if (!confirm('¿Borrar este cliente?')) return;
-      const r = await fetch(`/api/appointments/${id}`, { method: 'DELETE' });
-      if (!r.ok) alert('Error al borrar');
-      location.reload();
-    }
-
-    form.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      clearError();
-      const name = nameInput.value.trim();
-      const phone = phoneInput.value.trim() || undefined;
-      const notes = notesInput.value.trim() || undefined;
-      const dates = Array.from(selectedDates);
-
-      if (!name) {
-        showError('El nombre es obligatorio.');
-        nameInput.focus();
-        return;
-      }
-
-      if (dates.length === 0) {
-        showError('Selecciona al menos un día laboral.');
-        return;
-      }
-
-      submitBtn.disabled = true;
-      submitBtn.classList.add('opacity-70');
-
-      try {
-        for (const date of dates.sort()) {
-          const response = await fetch('/api/appointments', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ date, name, phone, notes })
-          });
-          if (!response.ok) {
-            const err = await response.json().catch(() => ({}));
-            showError(`Error en ${dayFormatter.format(parseDate(date))}: ${err.error || response.statusText}`);
-            return;
-          }
-        }
-        closeModal();
-        location.reload();
-      } finally {
-        submitBtn.disabled = false;
-        submitBtn.classList.remove('opacity-70');
-      }
-    });
-
-    document.addEventListener('click', (e) => {
-      const t = e.target;
-      if (!(t instanceof Element)) return;
-      const trigger = t.closest('[data-add],[data-edit],[data-delete]');
-      if (!trigger) return;
-      if (trigger.hasAttribute('data-add')) {
-        create(trigger.getAttribute('data-add'));
-      } else if (trigger.hasAttribute('data-edit')) {
-        update(trigger.getAttribute('data-edit'));
-      } else if (trigger.hasAttribute('data-delete')) {
-        remove(trigger.getAttribute('data-delete'));
-      }
-    });
-    window.printWeek = () => window.print();
-  </script>
-
   <div class="mt-6 flex gap-2 print:hidden">
-    <button class="btn" onclick="printWeek()">Exportar a PDF</button>
+    <button class="btn" type="button" data-print>Exportar a PDF</button>
   </div>
+
+  <script type="module" src={weekModalScript}></script>
 </BaseLayout>

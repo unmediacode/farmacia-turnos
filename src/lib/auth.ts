@@ -1,11 +1,12 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { json } from '@/lib/response';
 
 let jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
 
 export async function verifyJwt(token: string): Promise<boolean> {
   try {
-    const jwksUrl = process.env.SUPABASE_JWKS_URL;
-    const secret = process.env.SUPABASE_JWT_SECRET;
+    const jwksUrl = process.env['SUPABASE_JWKS_URL'];
+    const secret = process.env['SUPABASE_JWT_SECRET'];
 
     if (jwksUrl) {
       if (!jwks) jwks = createRemoteJWKSet(new URL(jwksUrl));
@@ -18,19 +19,27 @@ export async function verifyJwt(token: string): Promise<boolean> {
       await jwtVerify(token, enc);
       return true;
     }
-  } catch (e) {
+  } catch (error) {
+    console.warn('JWT inválido', error);
     return false;
   }
   return false;
 }
 
 export async function requireAuth(request: Request): Promise<Response | null> {
-  const requireAuth = String(process.env.REQUIRE_AUTH || 'false') === 'true';
-  if (!requireAuth) return null;
-  const auth = request.headers.get('authorization') || '';
+  const requireAuthFlag = String(process.env['REQUIRE_AUTH'] ?? 'false') === 'true';
+  if (!requireAuthFlag) return null;
+
+  const auth = request.headers.get('authorization') ?? '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
-  if (!token) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  if (!token) {
+    return json({ error: 'Unauthorized' }, { status: 401, headers: { 'www-authenticate': 'Bearer' } });
+  }
+
   const ok = await verifyJwt(token);
-  if (!ok) return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 });
+  if (!ok) {
+    return json({ error: 'Forbidden' }, { status: 403 });
+  }
+
   return null;
 }

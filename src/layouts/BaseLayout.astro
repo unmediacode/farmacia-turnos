@@ -1,29 +1,72 @@
 ---
 import '@/styles/global.css';
-const { title = 'Farmacia Miñoca · Dosificación Mensual' } = Astro.props;
+import themeToggleScript from '../scripts/theme-toggle.ts?url';
+
+type BaseLayoutProps = {
+  title?: string;
+};
+
+const { title = 'Farmacia Miñoca · Dosificación Mensual' } = Astro.props as BaseLayoutProps;
 ---
 <html lang="es" class="h-full">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="Gestión de recogidas de medicación de lunes a viernes." />
     <title>{title}</title>
+    <script is:inline>
+      (() => {
+        try {
+          const stored = localStorage.getItem('theme-preference');
+          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          const theme = stored === 'dark' || (!stored && prefersDark) ? 'dark' : 'light';
+          if (theme === 'dark') {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+          document.documentElement.dataset.theme = theme;
+        } catch (error) {
+          console.warn('No se pudo aplicar la preferencia de tema', error);
+        }
+      })();
+    </script>
   </head>
   <body class="h-full">
+    <a
+      href="#main-content"
+      class="sr-only absolute left-4 top-4 z-50 inline-flex items-center rounded-md bg-brand-600 px-4 py-2 text-white focus:not-sr-only"
+    >
+      Saltar al contenido principal
+    </a>
     <header class="border-b border-slate-200 dark:border-slate-800">
       <div class="container flex items-center justify-between py-3 print:pb-0">
         <a href="/" class="flex flex-col leading-tight text-brand-700 dark:text-brand-400">
           <span class="text-lg font-semibold">Farmacia Miñoca</span>
           <span class="text-xs font-medium text-slate-500 dark:text-slate-300">Dosificación Mensual</span>
         </a>
-        <nav class="flex gap-2 print:hidden">
-          <a class="btn-outline" href="/">Mes</a>
-          <a class="btn-outline" href="/semana">Semana</a>
-        </nav>
+        <div class="flex items-center gap-2 print:hidden">
+          <nav class="flex gap-2" aria-label="Navegación principal">
+            <a class="btn-outline" href="/">Mes</a>
+            <a class="btn-outline" href="/semana">Semana</a>
+          </nav>
+          <button
+            type="button"
+            class="btn-icon"
+            data-theme-toggle
+            aria-label="Cambiar modo de color"
+            aria-pressed="false"
+          >
+            <span aria-hidden="true" data-theme-icon>🌙</span>
+            <span class="sr-only" data-theme-text>Activar modo oscuro</span>
+          </button>
+        </div>
       </div>
     </header>
-    <main class="container py-6">
+    <main id="main-content" class="container py-6">
       <slot />
     </main>
+    <script type="module" src={themeToggleScript}></script>
   </body>
 </html>

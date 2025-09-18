@@ -1,6 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: ['./src/**/*.{astro,html,js,jsx,ts,tsx,vue,svelte}'],
+  content: ['src/**/*.{astro,html,js,jsx,ts,tsx,md,mdx}'],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
@@ -14,9 +15,13 @@ export default {
           600: '#2563eb',
           700: '#1d4ed8',
           800: '#1e40af',
-          900: '#1e3a8a',
-        },
-      },
-    },
+          900: '#1e3a8a'
+        }
+      }
+    }
   },
+  future: {
+    hoverOnlyWhenSupported: true
+  },
+  plugins: []
 };

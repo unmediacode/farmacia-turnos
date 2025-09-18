@@ -1,13 +1,22 @@
+import type { DateKey } from '@/lib/utils/date';
+
 export type Appointment = {
   id: number;
-  date: string; // YYYY-MM-DD
+  date: DateKey;
   name: string;
   phone?: string | null;
   notes?: string | null;
-  created_at?: string;
+  created_at?: string | null;
 };
 
 export type DayCount = {
-  date: string; // YYYY-MM-DD
+  date: DateKey;
   count: number;
+};
+
+export type AppointmentCreateInput = {
+  date: DateKey;
+  name: string;
+  phone?: string | null;
+  notes?: string | null;
 };

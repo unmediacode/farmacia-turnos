@@ -1,44 +1,94 @@
 ---
-import { weekDays } from '@/lib/utils/date';
-import dayjs from 'dayjs';
-const { dateKey, data } = Astro.props as { dateKey: string; data: Record<string, any[]> };
-const days = weekDays(dateKey);
+import type { Appointment } from '@/lib/types';
+import {
+  MAX_APPOINTMENTS_PER_DAY,
+  buildWorkWeek,
+  formatHuman
+} from '@/lib/utils/date';
+
+type CalendarWeekProps = {
+  dateKey: string;
+  data: Record<string, Appointment[]>;
+};
+
+const { dateKey, data } = Astro.props as CalendarWeekProps;
+const days = buildWorkWeek(dateKey);
 ---
-<div class="grid grid-cols-5 gap-4 print:gap-2">
-  {days.map((d) => (
-    <section class="border rounded-md p-3 border-slate-200 dark:border-slate-700 print:border-0 print:p-2">
-      <header class="flex items-center justify-between mb-2">
-        <div class="font-semibold print:text-sm">{dayjs(d).format('ddd DD/MM')}</div>
-        <div class="text-xs print:text-[0.65rem]">{(data[d]?.length ?? 0)}/10</div>
-      </header>
-      <ul class="space-y-2 min-h-24 print:space-y-1">
-        {(data[d] ?? []).map((a) => (
-          <li class="rounded bg-slate-50 dark:bg-slate-800 px-2 py-2 print:bg-transparent print:border-0 print:px-1 print:py-1">
-            <div class="text-sm font-semibold whitespace-nowrap overflow-hidden text-ellipsis print:text-xs">{a.name}</div>
-            {a.phone && <div class="text-xs text-slate-500 print:text-[0.65rem]">{a.phone}</div>}
-            <div class="mt-2 flex items-center justify-end gap-1 print:hidden">
-              <button class="btn-icon" data-edit={a.id} aria-label="Editar">
-                <svg class="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M13.586 3.586a2 2 0 0 1 2.828 2.828l-8.25 8.25-3.828.808.808-3.828 8.442-8.058z" />
-                  <path d="M11.5 5.5l3 3" />
-                </svg>
-                <span class="sr-only">Editar</span>
-              </button>
-              <button class="btn-icon" data-delete={a.id} aria-label="Borrar">
-                <svg class="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M4 6h12" />
-                  <path d="M8 6V4h4v2" />
-                  <path d="M6 6v10a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V6" />
-                  <path d="M8.5 9v6" />
-                  <path d="M11.5 9v6" />
-                </svg>
-                <span class="sr-only">Borrar</span>
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
-      <button class="btn w-full mt-3" data-add={d}>Añadir</button>
-    </section>
-  ))}
+<div class="grid gap-4 print:gap-2 md:grid-cols-5">
+  {days.map((day) => {
+    const appointments: Appointment[] = data[day] ?? [];
+    const occupancy = `${appointments.length}/${MAX_APPOINTMENTS_PER_DAY}`;
+    const label = formatHuman(day, "dddd D [de] MMMM");
+    return (
+      <section
+        class="rounded-md border border-slate-200 p-3 dark:border-slate-700 print:border-0 print:p-2"
+        aria-labelledby={`day-${day}`}
+      >
+        <header class="mb-2 flex items-center justify-between">
+          <h2 id={`day-${day}`} class="text-sm font-semibold capitalize print:text-xs">
+            {label}
+          </h2>
+          <p class="text-xs text-slate-500 print:text-[0.65rem]" aria-live="polite">
+            {occupancy}
+          </p>
+        </header>
+        <ul class="min-h-24 space-y-2 print:space-y-1" aria-label={`Citas para ${label}`}>
+          {appointments.map((appointment) => (
+            <li
+              class="rounded bg-slate-50 px-2 py-2 dark:bg-slate-800 print:bg-transparent print:px-1 print:py-1"
+              data-appointment-id={appointment.id}
+            >
+              <div class="overflow-hidden text-ellipsis whitespace-nowrap text-sm font-semibold print:text-xs">
+                {appointment.name}
+              </div>
+              {appointment.phone && (
+                <div class="text-xs text-slate-500 print:text-[0.65rem]">{appointment.phone}</div>
+              )}
+              <div class="mt-2 flex items-center justify-end gap-1 print:hidden">
+                <button class="btn-icon" data-edit={appointment.id} type="button">
+                  <span class="sr-only">Editar cita de {appointment.name}</span>
+                  <svg
+                    aria-hidden="true"
+                    class="h-4 w-4"
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M13.586 3.586a2 2 0 0 1 2.828 2.828l-8.25 8.25-3.828.808.808-3.828 8.442-8.058z" />
+                    <path d="M11.5 5.5l3 3" />
+                  </svg>
+                </button>
+                <button class="btn-icon" data-delete={appointment.id} type="button">
+                  <span class="sr-only">Borrar cita de {appointment.name}</span>
+                  <svg
+                    aria-hidden="true"
+                    class="h-4 w-4"
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M4 6h12" />
+                    <path d="M8 6V4h4v2" />
+                    <path d="M6 6v10a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V6" />
+                    <path d="M8.5 9v6" />
+                    <path d="M11.5 9v6" />
+                  </svg>
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+        <button class="btn mt-3 w-full" data-add={day} type="button">
+          Añadir
+          <span class="sr-only">en {label}</span>
+        </button>
+      </section>
+    );
+  })}
 </div>

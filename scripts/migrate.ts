@@ -2,8 +2,7 @@ import { getDb, initDb } from '../src/lib/db.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
-async function main() {
-  // Ensure .data folder exists when using local SQLite
+async function main(): Promise<void> {
   const dataDir = path.join(process.cwd(), '.data');
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
@@ -14,7 +13,7 @@ async function main() {
   await db.execute(`
     CREATE TABLE IF NOT EXISTS appointments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      date TEXT NOT NULL, -- YYYY-MM-DD (lunes a viernes)
+      date TEXT NOT NULL,
       name TEXT NOT NULL,
       phone TEXT,
       notes TEXT,
@@ -26,10 +25,10 @@ async function main() {
     CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments(date);
   `);
 
-  console.log('Migration completed.');
+  console.info('Migration completed.');
 }
 
-main().catch((err) => {
-  console.error(err);
+main().catch((error) => {
+  console.error(error);
   process.exit(1);
 });

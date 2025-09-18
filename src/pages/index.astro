@@ -1,27 +1,59 @@
 ---
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import CalendarMonth from '@/components/CalendarMonth.astro';
-import { dayjs } from '@/lib/utils/date';
-import { monthGrid } from '@/lib/utils/date';
-const now = dayjs();
-const y = Number(Astro.url.searchParams.get('y') ?? now.year());
-const m0 = Number(Astro.url.searchParams.get('m') ?? now.month());
+import type { DayCount } from '@/lib/types';
+import { buildMonthGrid, dayjs } from '@/lib/utils/date';
 
-const monthKey = dayjs().year(y).month(m0).format('YYYY-MM');
-const grid = monthGrid(y, m0);
-const rangeStart = grid[0];
-const rangeEnd = grid[grid.length - 1];
-const queryParams = rangeStart && rangeEnd ? `start=${rangeStart}&end=${rangeEnd}` : `month=${monthKey}`;
-const res = await fetch(`${Astro.url.origin}/api/appointments?${queryParams}`);
-const counts = res.ok ? await res.json() : [];
+const now = dayjs();
+
+const parseOptionalInt = (value: string | null): number | null => {
+  if (value === null) return null;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+const parsedYear = parseOptionalInt(Astro.url.searchParams.get('y'));
+const year = parsedYear ?? now.year();
+
+const parsedMonth = parseOptionalInt(Astro.url.searchParams.get('m'));
+const monthIndex = parsedMonth !== null && parsedMonth >= 0 && parsedMonth <= 11 ? parsedMonth : now.month();
+
+const displayMonth = dayjs().year(year).month(monthIndex).startOf('month');
+const monthKey = displayMonth.format('YYYY-MM');
+const daysInGrid = buildMonthGrid(year, monthIndex);
+
+let counts: DayCount[] = [];
+if (daysInGrid.length > 0) {
+  const start = daysInGrid[0];
+  const end = daysInGrid[daysInGrid.length - 1];
+  const endpoint = new URL(`/api/appointments`, Astro.url.origin);
+  endpoint.searchParams.set('start', start);
+  endpoint.searchParams.set('end', end);
+
+  try {
+    const response = await fetch(endpoint, {
+      headers: { accept: 'application/json' },
+      cache: 'no-store'
+    });
+    if (response.ok) {
+      counts = (await response.json()) as DayCount[];
+    }
+  } catch (error) {
+    console.error('Fallo al recuperar los totales del mes', error);
+  }
+}
 ---
 <BaseLayout title="Calendario mensual">
-  <div class="flex items-center justify-between mb-4">
-    <div class="text-2xl font-bold">{dayjs().year(y).month(m0).format('MMMM YYYY')}</div>
+  <div class="mb-4 flex items-center justify-between">
+    <h1 class="text-2xl font-bold capitalize">{displayMonth.format('MMMM YYYY')}</h1>
     <div class="flex gap-2">
-      <a class="btn-outline" href={`/?y=${m0 === 0 ? y - 1 : y}&m=${(m0 + 11) % 12}`}>Anterior</a>
-      <a class="btn-outline" href={`/?y=${m0 === 11 ? y + 1 : y}&m=${(m0 + 1) % 12}`}>Siguiente</a>
+      <a class="btn-outline" href={`/?y=${monthIndex === 0 ? year - 1 : year}&m=${(monthIndex + 11) % 12}`}>
+        Anterior
+      </a>
+      <a class="btn-outline" href={`/?y=${monthIndex === 11 ? year + 1 : year}&m=${(monthIndex + 1) % 12}`}>
+        Siguiente
+      </a>
     </div>
   </div>
-  <CalendarMonth year={y} month0={m0} counts={counts} />
+  <CalendarMonth year={year} month0={monthIndex} counts={counts} key={monthKey} />
 </BaseLayout>

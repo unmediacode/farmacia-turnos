@@ -1,80 +1,166 @@
 import type { APIRoute } from 'astro';
-import { getDb } from '@/lib/db';
-import { dayjs } from '@/lib/utils/date';
 import { requireAuth } from '@/lib/auth';
+import { getDb } from '@/lib/db';
+import { json, jsonError } from '@/lib/response';
+import { parseJsonBody } from '@/lib/http';
+import { checkRateLimit, extractClientKey } from '@/lib/rate-limit';
+import {
+  ISO_DATE_FORMAT,
+  MAX_APPOINTMENTS_PER_DAY,
+  dayjs,
+  buildWorkWeek
+} from '@/lib/utils/date';
+import {
+  buildLimitReachedMessage,
+  createAppointmentSchema,
+  listQuerySchema
+} from '@/lib/validation/appointments';
+
+const NO_STORE_HEADER = { 'cache-control': 'no-store' } as const;
+
+type RawRow = Record<string, unknown>;
+
+type ExecuteResult = {
+  rows: RawRow[];
+};
+
+function asString(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function asNullableString(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  return typeof value === 'string' ? value : null;
+}
+
+function asNumber(value: unknown): number {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+  return 0;
+}
+
+function mapCounts(result: ExecuteResult): { date: string; count: number }[] {
+  return result.rows.map((row) => ({
+    date: asString(row['date']),
+    count: asNumber(row['count'] ?? row['c'])
+  }));
+}
+
+function mapAppointments(
+  result: ExecuteResult
+): {
+  id: number;
+  date: string;
+  name: string;
+  phone: string | null;
+  notes: string | null;
+  created_at: string | null;
+}[] {
+  return result.rows.map((row) => ({
+    id: asNumber(row['id']),
+    date: asString(row['date']),
+    name: asString(row['name']),
+    phone: asNullableString(row['phone']),
+    notes: asNullableString(row['notes']),
+    created_at: asNullableString(row['created_at'])
+  }));
+}
 
 export const GET: APIRoute = async ({ request }) => {
   const db = getDb();
   const url = new URL(request.url);
-  const month = url.searchParams.get('month'); // YYYY-MM
-  const week = url.searchParams.get('week'); // YYYY-MM-DD within week
-  const day = url.searchParams.get('day'); // YYYY-MM-DD
-  const start = url.searchParams.get('start');
-  const end = url.searchParams.get('end');
+  const params = Object.fromEntries(url.searchParams.entries());
+
+  const parsed = listQuerySchema.safeParse(params);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    return jsonError(issue?.message ?? 'Parámetros inválidos', 400);
+  }
+
+  const { day, week, month, start, end } = parsed.data;
 
   if (start && end) {
     const rows = await db.execute({
       sql: 'SELECT date, COUNT(*) as count FROM appointments WHERE date BETWEEN ? AND ? GROUP BY date',
-      args: [start, end],
+      args: [start, end]
     });
-    return new Response(JSON.stringify(rows.rows), { status: 200 });
+    return json(mapCounts(rows), { status: 200, headers: NO_STORE_HEADER });
   }
 
   if (day) {
     const rows = await db.execute({
       sql: 'SELECT * FROM appointments WHERE date = ? ORDER BY created_at ASC',
-      args: [day],
+      args: [day]
     });
-    return new Response(JSON.stringify(rows.rows), { status: 200 });
+    return json(mapAppointments(rows), { status: 200, headers: NO_STORE_HEADER });
   }
 
   if (week) {
-    const d = dayjs(week).weekday(1);
-    const start = d.format('YYYY-MM-DD');
-    const end = d.add(4, 'day').format('YYYY-MM-DD');
+    const workWeek = buildWorkWeek(week);
+    const startOfWeek = workWeek[0];
+    const endOfWeek = workWeek[workWeek.length - 1];
+    if (!startOfWeek || !endOfWeek) {
+      return jsonError('Semana inválida.', 400);
+    }
     const rows = await db.execute({
       sql: 'SELECT date, COUNT(*) as count FROM appointments WHERE date BETWEEN ? AND ? GROUP BY date',
-      args: [start, end],
+      args: [startOfWeek, endOfWeek]
     });
-    return new Response(JSON.stringify(rows.rows), { status: 200 });
+    return json(mapCounts(rows), { status: 200, headers: NO_STORE_HEADER });
   }
 
   if (month) {
-    const start = dayjs(month + '-01').startOf('month').format('YYYY-MM-DD');
-    const end = dayjs(month + '-01').endOf('month').format('YYYY-MM-DD');
+    const base = dayjs(`${month}-01`, ISO_DATE_FORMAT, true);
+    if (!base.isValid()) {
+      return jsonError('Mes inválido.', 400);
+    }
+    const startOfMonth = base.startOf('month').format(ISO_DATE_FORMAT);
+    const endOfMonth = base.endOf('month').format(ISO_DATE_FORMAT);
     const rows = await db.execute({
       sql: 'SELECT date, COUNT(*) as count FROM appointments WHERE date BETWEEN ? AND ? GROUP BY date',
-      args: [start, end],
+      args: [startOfMonth, endOfMonth]
     });
-    return new Response(JSON.stringify(rows.rows), { status: 200 });
+    return json(mapCounts(rows), { status: 200, headers: NO_STORE_HEADER });
   }
 
-  return new Response(JSON.stringify({ error: 'Specify day, week or month' }), { status: 400 });
+  return jsonError('Especifica day, week, month o start/end', 400);
 };
 
 export const POST: APIRoute = async ({ request }) => {
-  const authRes = await requireAuth(request);
-  if (authRes) return authRes;
+  const authResult = await requireAuth(request);
+  if (authResult) return authResult;
+
+  const rateKey = extractClientKey(request);
+  const rate = checkRateLimit(rateKey, { windowMs: 60_000, maxRequests: 30 });
+  if (!rate.ok) {
+    return jsonError('Demasiadas solicitudes. Espera unos segundos e inténtalo de nuevo.', 429, {
+      headers: { 'retry-after': String(rate.retryAfter) }
+    });
+  }
+
+  const parsedBody = await parseJsonBody(request, createAppointmentSchema);
+  if (!parsedBody.success) return parsedBody.error;
+
+  const { date, name, phone, notes } = parsedBody.data;
   const db = getDb();
-  const data = await request.json();
-  const { date, name, phone, notes } = data as { date: string; name: string; phone?: string; notes?: string };
 
-  if (!date || !name) return new Response(JSON.stringify({ error: 'date and name are required' }), { status: 400 });
+  const currentCount = await db.execute({
+    sql: 'SELECT COUNT(*) as count FROM appointments WHERE date = ?',
+    args: [date]
+  });
+  const countValue = asNumber((currentCount.rows[0] as RawRow)?.['count']);
+  if (countValue >= MAX_APPOINTMENTS_PER_DAY) {
+    return jsonError(buildLimitReachedMessage(date), 409);
+  }
 
-  // enforce weekdays only
-  const dow = dayjs(date).day();
-  if (dow === 0 || dow === 6) return new Response(JSON.stringify({ error: 'Only Monday to Friday allowed' }), { status: 400 });
-
-  // limit 10 per day
-  const countRes = await db.execute({ sql: 'SELECT COUNT(*) as c FROM appointments WHERE date = ?', args: [date] });
-  const c = Number((countRes.rows[0] as any).c ?? 0);
-  if (c >= 10) return new Response(JSON.stringify({ error: 'Limit of 10 customers per day reached' }), { status: 409 });
-
-  const res = await db.execute({
+  const insert = await db.execute({
     sql: 'INSERT INTO appointments (date, name, phone, notes) VALUES (?, ?, ?, ?)',
-    args: [date, name, phone ?? null, notes ?? null],
+    args: [date, name, phone ?? null, notes ?? null]
   });
 
-  const id = res.lastInsertRowid !== undefined ? Number(res.lastInsertRowid) : null;
-  return new Response(JSON.stringify({ id }), { status: 201 });
+  const id = insert.lastInsertRowid !== undefined ? Number(insert.lastInsertRowid) : null;
+  return json({ id }, { status: 201 });
 };

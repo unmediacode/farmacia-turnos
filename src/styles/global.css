@@ -6,12 +6,17 @@
   color-scheme: light dark;
 }
 
-html, body {
+html,
+body {
   @apply h-full;
 }
 
 body {
-  @apply bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100;
+  @apply min-h-screen bg-white text-slate-900 antialiased dark:bg-slate-900 dark:text-slate-100;
+}
+
+:focus-visible {
+  @apply outline-none ring-2 ring-brand-500 ring-offset-2;
 }
 
 .container {
@@ -19,17 +24,23 @@ body {
 }
 
 .btn {
-  @apply inline-flex items-center gap-2 rounded-md bg-brand-600 px-3 py-2 text-white hover:bg-brand-700 transition disabled:opacity-50 disabled:cursor-not-allowed;
+  @apply inline-flex items-center gap-2 rounded-md bg-brand-600 px-3 py-2 text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-500 dark:hover:bg-brand-600;
 }
 
 .btn-outline {
-  @apply inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800 transition;
+  @apply inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 dark:border-slate-700 dark:hover:bg-slate-800;
 }
 
 .btn-icon {
-  @apply inline-flex h-7 w-7 items-center justify-center rounded border border-slate-300 text-slate-600 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800;
+  @apply inline-flex h-8 w-8 items-center justify-center rounded border border-slate-300 text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800;
 }
 
 .btn-icon svg {
   @apply h-4 w-4;
+}
+
+@media print {
+  body {
+    @apply bg-white text-slate-900;
+  }
 }

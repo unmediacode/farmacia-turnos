@@ -1,32 +1,97 @@
 ---
-import { monthGrid } from '@/lib/utils/date';
-import dayjs from 'dayjs';
-const { year, month0, counts = [] } = Astro.props as { year: number; month0: number; counts: Array<{ date: string; count: number }> };
-const grid = monthGrid(year, month0);
-const countMap = new Map(counts.map((c) => [c.date, Number((c as any).count ?? c.count)]));
-const currentMonth = dayjs().year(year).month(month0).format('YYYY-MM');
+import type { DayCount } from '@/lib/types';
+import {
+  MAX_APPOINTMENTS_PER_DAY,
+  buildMonthGrid,
+  dayjs,
+  formatHuman,
+  isWeekday,
+  toDateKey
+} from '@/lib/utils/date';
+
+const { year, month0, counts = [] } = Astro.props as {
+  year: number;
+  month0: number;
+  counts: DayCount[];
+};
+
+const days = buildMonthGrid(year, month0);
+const countEntries = counts.map((item) => [item.date, Number(item.count)] as const);
+const countMap = new Map<string, number>(countEntries);
+const currentMonthKey = dayjs({ year, month: month0 }).format('YYYY-MM');
+const todayKey = toDateKey(new Date());
+const todayMonthKey = dayjs(todayKey).format('YYYY-MM');
+const isViewingCurrentMonth = currentMonthKey === todayMonthKey;
+const weekdayLabels = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] as const;
 ---
-<div class="grid grid-cols-7 gap-2">
-  {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((d) => (
-    <div class="text-xs font-medium text-slate-500 dark:text-slate-400 text-center">{d}</div>
+<div
+  role="grid"
+  aria-label={`Calendario mensual ${dayjs({ year, month: month0 }).format('MMMM YYYY')}`}
+  class="grid grid-cols-7 gap-2"
+>
+  {weekdayLabels.map((label) => (
+    <div role="columnheader" class="text-xs font-medium text-center text-slate-500 dark:text-slate-400">
+      {label[0]}
+      <span class="sr-only">{label.slice(1)}</span>
+    </div>
   ))}
-  {grid.map((date) => {
-    const isCurrentMonth = date.startsWith(currentMonth);
-    const dow = dayjs(date).day();
-    const isWeekend = dow === 0 || dow === 6;
+  {days.map((date) => {
+    const dateInstance = dayjs(date);
+    const inCurrentMonth = date.startsWith(currentMonthKey);
+    const weekend = !isWeekday(date);
     const count = countMap.get(date) ?? 0;
-    const cardBg = isWeekend
-      ? 'bg-slate-100 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400'
-      : isCurrentMonth
-        ? 'bg-white dark:bg-slate-900'
-        : 'bg-slate-50 dark:bg-slate-800';
+    const isToday = isViewingCurrentMonth && date === todayKey;
+    const occupancyLabel = weekend
+      ? 'Fin de semana'
+      : `${count} de ${MAX_APPOINTMENTS_PER_DAY} turnos reservados`;
+    const baseClasses: string[] = [
+      'rounded-md',
+      'border',
+      'p-2',
+      'min-h-24',
+      'flex',
+      'flex-col',
+      'justify-between',
+      'focus:outline-none',
+      'focus-visible:ring-2',
+      'focus-visible:ring-offset-2',
+      'focus-visible:ring-brand-500',
+      'transition'
+    ];
+
+    if (weekend) {
+      baseClasses.push('bg-slate-100', 'text-slate-500', 'dark:bg-slate-800/60', 'dark:text-slate-400');
+    } else if (!inCurrentMonth) {
+      baseClasses.push('bg-slate-50', 'dark:bg-slate-800');
+    } else {
+      baseClasses.push('bg-white', 'dark:bg-slate-900');
+    }
+
+    if (isToday) {
+      baseClasses.push('ring-2', 'ring-brand-500', 'ring-offset-2');
+    }
+
     return (
-      <a href={`/semana?d=${date}`} class={`rounded-md border p-2 min-h-24 flex flex-col justify-between ${cardBg} border-slate-200 dark:border-slate-700`}>
-        <div class="text-sm">{dayjs(date).date()}</div>
-        <div class="text-xs mt-2 min-h-[1.25rem]">
-          {!isWeekend && (
-            <span class={`inline-flex items-center rounded px-2 py-0.5 text-xs ${count >= 10 ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
-              {count}/10
+      <a
+        role="gridcell"
+        class={baseClasses.join(' ')}
+        href={`/semana?d=${date}`}
+        aria-label={`${formatHuman(date, "dddd D [de] MMMM")}. ${occupancyLabel}.`}
+        aria-current={isToday ? 'date' : undefined}
+      >
+        <div class="text-sm font-medium">{dateInstance.date()}</div>
+        <div class="mt-2 min-h-[1.25rem] text-xs">
+          {!weekend && (
+            <span
+              class={`inline-flex items-center rounded px-2 py-0.5 text-xs ${
+                count >= MAX_APPOINTMENTS_PER_DAY
+                  ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                  : count >= 7
+                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                    : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+              }`}
+            >
+              {count}/{MAX_APPOINTMENTS_PER_DAY}
             </span>
           )}
         </div>

@@ -1,93 +1,87 @@
-# Calendario Farmacia (Astro + Tailwind + SQLite)
+# Calendario Farmacia
 
-Aplicación para gestionar recogidas de medicación de lunes a viernes, con un máximo de 10 clientes por día. Incluye vistas mensual y semanal, CRUD, contador por día, exportación a PDF (imprimir) y backend simple con Astro serverless. Base de datos local en SQLite (libSQL) con opción a Turso en producción. Autenticación opcional con Supabase (JWT).
+Aplicación Astro para gestionar recogidas de medicación de lunes a viernes con un máximo de 10 turnos por día. Incluye vistas mensual y semanal, CRUD seguro, exportación a PDF (impresión) y API serverless lista para Vercel.
 
-## Tecnologías
-- Astro 4 (adapter Vercel serverless)
-- TailwindCSS
-- libSQL (@libsql/client) con SQLite local o Turso
-- TypeScript
-- Supabase Auth opcional (verificación JWT con `jose`)
+## Requisitos
+- Node.js 20.11 o superior (`.nvmrc` incluido)
+- npm 10 (instalado con Node 20) o Bun 1.1+
+- SQLite local (se crea automáticamente en `.data/db.sqlite`)
 
-## Requisitos previos
-- Node.js >= 18.17 o Bun >= 1.1
+## Puesta en marcha
+1. Instala dependencias
+   ```bash
+   npm install
+   ```
+2. Crea el fichero de entorno
+   ```bash
+   cp .env.example .env
+   ```
+3. Lanza la migración (crea la base SQLite local)
+   ```bash
+   npm run migrate
+   ```
+4. Arranca el entorno de desarrollo en `http://localhost:4321`
+   ```bash
+   npm run dev
+   ```
 
-## Configuración
-1) Copia el `.env.example` a `.env` y ajusta valores:
+## Scripts disponibles
+- `npm run dev` – servidor de desarrollo Astro
+- `npm run build` – build de producción
+- `npm run preview` – previsualización local del build
+- `npm run lint` – ESLint con reglas para Astro + TypeScript
+- `npm run typecheck` – `tsc --noEmit` con opciones estrictas
+- `npm run test` – tests de utilidades con Vitest
+- `npm run format` – Prettier sobre todo el repo
+- `npm run migrate` – inicializa/actualiza la base local (`.data/db.sqlite`)
 
-```
-cp .env.example .env
-```
+## Variables de entorno
+La aplicación funciona sin autenticación en local. Ajusta según tus necesidades:
 
-Variables importantes:
-- `REQUIRE_AUTH=false` por defecto. Si lo pones en `true`, las rutas de escritura (POST/PUT/DELETE) requieren un JWT válido de Supabase.
-- Para Turso añade `TURSO_DATABASE_URL` y `TURSO_AUTH_TOKEN`.
-- Para auth añade `SUPABASE_JWKS_URL` (recomendado) o `SUPABASE_JWT_SECRET`.
+| Variable | Descripción |
+| --- | --- |
+| `REQUIRE_AUTH` | `false` por defecto. Si es `true`, las rutas de escritura exigen un JWT de Supabase. |
+| `TURSO_DATABASE_URL` | URL `libsql://` de Turso para despliegues persistentes. |
+| `TURSO_AUTH_TOKEN` | Token de acceso Turso, obligatorio junto con la URL. |
+| `SUPABASE_JWKS_URL` | JWKS de Supabase para validar JWT (recomendado). |
+| `SUPABASE_JWT_SECRET` | Alternativa simétrica si no usas JWKS. |
 
-2) Instala dependencias:
-- Con npm:
-```
-npm install
-```
-- Con Bun:
-```
-bun install
-```
+> Si defines credenciales de Turso, se usará automáticamente en producción. Si sólo rellenas uno de los dos campos, el arranque fallará para evitar configuraciones parciales.
 
-3) Ejecuta la migración (crea la base de datos local en `.data/db.sqlite`):
-- Con npm:
-```
-npm run migrate
-```
-- Con Bun:
-```
-bun run scripts/migrate.ts
-```
-
-4) Arranca el entorno de desarrollo:
-- Con npm:
-```
-npm run dev
-```
-- Con Bun:
-```
-bun run dev
-```
-
-La app estará en `http://localhost:4321`.
-
-## Uso
-- Vista Mensual: `/` muestra un grid por meses con contador `n/10` por día (fines de semana atenuados).
-- Vista Semanal: `/semana` muestra L–V con lista de clientes por día.
-- CRUD: en la vista semanal usa los botones Añadir/Editar/Borrar. Límite de 10 por día. Fines de semana bloqueados.
-- Exportar a PDF: usa el botón "Exportar a PDF" (invoca `window.print()`).
-
-## API
-- `GET /api/appointments?day=YYYY-MM-DD` -> listado del día
-- `GET /api/appointments?week=YYYY-MM-DD` -> conteos L–V de la semana de esa fecha
-- `GET /api/appointments?month=YYYY-MM` -> conteos del mes
-- `POST /api/appointments` -> crear { date, name, phone?, notes? }
-- `PUT /api/appointments/:id` -> actualizar { name?, phone?, notes? }
-- `DELETE /api/appointments/:id` -> borrar cita
-
-Si `REQUIRE_AUTH=true`, `POST/PUT/DELETE` requieren `Authorization: Bearer <token>` con JWT válido de Supabase.
+## Seguridad y validaciones
+- Validación con Zod de todos los payloads y parámetros de la API.
+- Límite configurable en código de 10 citas por día y restricción L-V en backend + frontend.
+- Rate limiting in-memory (30 req/min por IP) aplicado a POST/PUT/DELETE.
+- Sanitización básica (`trim`, tamaños max.) para evitar inyecciones y XSS.
+- `vercel.json` incluye CSP restrictivo, HSTS, Referrer-Policy, Permissions-Policy y cacheo de `/_astro`.
 
 ## Despliegue en Vercel
-- Incluye `astro.config.mjs` con adapter de Vercel y `vercel.json`.
-- Configura variables de entorno en el proyecto de Vercel:
-  - `REQUIRE_AUTH`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `SUPABASE_JWKS_URL` (o `SUPABASE_JWT_SECRET`).
-- Usa SQLite local en desarrollo. En Vercel, usa Turso (recomendado) para base de datos persistente.
+1. Usa el adaptador serverless (`@astrojs/vercel/serverless`) incluido en `astro.config.mjs`. Mantiene compatibilidad con SQLite/libSQL.
+2. Variables recomendadas en el panel de Vercel:
+   - `REQUIRE_AUTH`
+   - `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`
+   - `SUPABASE_JWKS_URL` o `SUPABASE_JWT_SECRET`
+3. Node 20 se configura mediante `vercel.json` y `.nvmrc`.
+4. El build se realiza con `npm run build`; el `outputDirectory` es `dist`.
+5. Asegura que la región del proyecto sea europea (`fra1`) para menor latencia.
 
-## Estructura relevante
-- `src/pages/index.astro`: vista mensual.
-- `src/pages/semana.astro`: vista semanal y lógica UI CRUD ligera.
-- `src/pages/api/appointments/*`: API REST.
-- `src/lib/db.ts`: cliente libSQL (SQLite/Turso).
-- `src/lib/utils/date.ts`: utilidades de fechas `dayjs` (grids y cálculos).
-- `src/lib/auth.ts`: verificación JWT (Supabase) opcional.
-- `scripts/migrate.ts`: migraciones (crea tablas/índices y carpeta `.data/`).
+## Pruebas
+Los utilitarios de calendario cuentan con tests (`src/lib/utils/date.test.ts`). Ejecuta:
+```bash
+npm run test
+```
 
-## Notas de mantenimiento
-- Límite de 10 por día se valida en el backend al crear.
-- Días de fin de semana se muestran, pero se evita crear nuevas entradas por backend (HTTP 400).
-- Código preparado para escalar a un modal/diálogo de edición más avanzado o SSR de acciones.
+## Arquitectura rápida
+- `src/pages` – rutas Astro (`/` mensual, `/semana` semanal, API REST).
+- `src/lib` – base de datos, auth, validaciones, utilidades de fechas, rate-limit y helpers HTTP.
+- `src/components` – vistas de calendario accesibles, listas para teclado/lector.
+- `src/scripts/week-modal.ts` – lógica cliente modular para el modal CRUD (sin inline scripts, compatible con CSP).
+
+## Deploy checklist
+- [ ] Variables `.env` configuradas y credenciales seguras en Vercel
+- [ ] `npm run lint && npm run typecheck && npm run test`
+- [ ] `npm run build`
+- [ ] Turso configurado si necesitas persistencia en producción
+- [ ] Revisión de logs post despliegue (errores HTTP ≥400)
+
+> La API responde siempre en JSON y establece `cache-control: no-store` para evitar servir datos obsoletos.

@@ -1,20 +1,34 @@
 # Dependencies
 node_modules/
 
-# Builds
-.dist/
+# Build output
+.astro/
 dist/
 .vercel/
 
-# Env
+# Environment files
 .env
-.env.local
+.env.*
+!.env.example
 
-# Local DB
+# Local database
 .data/
 
 # Logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
+# Editor & OS
+.DS_Store
+.vscode/
+.idea/
+
+# Coverage & reports
+coverage/
+reports/
+
+# Misc
+*.sqlite

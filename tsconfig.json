@@ -3,12 +3,30 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "strict": true,
+    "lib": ["DOM", "DOM.Iterable", "ES2023"],
+    "types": ["astro/client", "node"],
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]
     },
-    "types": ["astro/client", "node"],
-    "skipLibCheck": true
-  }
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "forceConsistentCasingInFileNames": true,
+    "verbatimModuleSyntax": true,
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": [
+    "src",
+    "scripts",
+    "astro.config.mjs",
+    "tailwind.config.mjs",
+    "vitest.config.ts"
+  ],
+  "exclude": ["node_modules", "dist", ".astro", "coverage"]
 }
