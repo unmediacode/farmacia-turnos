@@ -4,19 +4,19 @@ import dayjs from 'dayjs';
 const { dateKey, data } = Astro.props as { dateKey: string; data: Record<string, any[]> };
 const days = weekDays(dateKey);
 ---
-<div class="grid grid-cols-5 gap-4">
+<div class="grid grid-cols-5 gap-4 print:gap-2">
   {days.map((d) => (
-    <section class="border rounded-md p-3 border-slate-200 dark:border-slate-700">
+    <section class="border rounded-md p-3 border-slate-200 dark:border-slate-700 print:border-0 print:p-2">
       <header class="flex items-center justify-between mb-2">
-        <div class="font-semibold">{dayjs(d).format('ddd DD/MM')}</div>
-        <div class="text-xs">{(data[d]?.length ?? 0)}/10</div>
+        <div class="font-semibold print:text-sm">{dayjs(d).format('ddd DD/MM')}</div>
+        <div class="text-xs print:text-[0.65rem]">{(data[d]?.length ?? 0)}/10</div>
       </header>
-      <ul class="space-y-2 min-h-24">
+      <ul class="space-y-2 min-h-24 print:space-y-1">
         {(data[d] ?? []).map((a) => (
-          <li class="rounded bg-slate-50 dark:bg-slate-800 px-2 py-2">
-            <div class="text-sm font-medium">{a.name}</div>
-            {a.phone && <div class="text-xs text-slate-500">{a.phone}</div>}
-            <div class="mt-2 flex items-center justify-end gap-1">
+          <li class="rounded bg-slate-50 dark:bg-slate-800 px-2 py-2 print:bg-transparent print:border-0 print:px-1 print:py-1">
+            <div class="text-sm font-semibold whitespace-nowrap overflow-hidden text-ellipsis print:text-xs">{a.name}</div>
+            {a.phone && <div class="text-xs text-slate-500 print:text-[0.65rem]">{a.phone}</div>}
+            <div class="mt-2 flex items-center justify-end gap-1 print:hidden">
               <button class="btn-icon" data-edit={a.id} aria-label="Editar">
                 <svg class="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M13.586 3.586a2 2 0 0 1 2.828 2.828l-8.25 8.25-3.828.808.808-3.828 8.442-8.058z" />
