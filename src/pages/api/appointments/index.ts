@@ -1,9 +1,10 @@
 import type { APIRoute } from 'astro';
-import { getDb } from '@/lib/db';
+import { ensureSchema, getDb } from '@/lib/db';
 import { dayjs } from '@/lib/utils/date';
 import { requireAuth } from '@/lib/auth';
 
 export const GET: APIRoute = async ({ request }) => {
+  await ensureSchema();
   const db = getDb();
   const url = new URL(request.url);
   const month = url.searchParams.get('month'); // YYYY-MM
@@ -55,6 +56,7 @@ export const GET: APIRoute = async ({ request }) => {
 export const POST: APIRoute = async ({ request }) => {
   const authRes = await requireAuth(request);
   if (authRes) return authRes;
+  await ensureSchema();
   const db = getDb();
   const data = await request.json();
   const { date, name, phone, notes } = data as { date: string; name: string; phone?: string; notes?: string };
