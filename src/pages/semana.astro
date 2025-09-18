@@ -1,0 +1,77 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import CalendarWeek from '@/components/CalendarWeek.astro';
+import { dayjs } from '@/lib/utils/date';
+
+const d = Astro.url.searchParams.get('d') ?? dayjs().format('YYYY-MM-DD');
+
+// Fetch week counts and per-day appointments
+const start = dayjs(d).weekday(1).format('YYYY-MM-DD');
+const end = dayjs(d).weekday(5).format('YYYY-MM-DD');
+
+async function getDay(date: string) {
+  const r = await fetch(`${Astro.url.origin}/api/appointments?day=${date}`);
+  return r.ok ? await r.json() : [];
+}
+
+const days = [0,1,2,3,4].map((i) => dayjs(start).add(i, 'day').format('YYYY-MM-DD'));
+const data: Record<string, any[]> = {};
+for (const day of days) {
+  data[day] = await getDay(day);
+}
+---
+<BaseLayout title="Calendario semanal">
+  <div class="flex items-center justify-between mb-4">
+    <div class="text-2xl font-bold">Semana de {dayjs(start).format('DD/MM/YYYY')}</div>
+    <div class="flex gap-2">
+      <a class="btn-outline" href={`/semana?d=${dayjs(d).subtract(7, 'day').format('YYYY-MM-DD')}`}>Anterior</a>
+      <a class="btn-outline" href={`/semana?d=${dayjs(d).add(7, 'day').format('YYYY-MM-DD')}`}>Siguiente</a>
+    </div>
+  </div>
+  <CalendarWeek dateKey={d} data={data} />
+
+  <script>
+    async function create(date) {
+      const name = prompt('Nombre del cliente:');
+      if (!name) return;
+      const phone = prompt('Teléfono (opcional):') || undefined;
+      const notes = prompt('Notas (opcional):') || undefined;
+      const r = await fetch('/api/appointments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date, name, phone, notes })});
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        alert('Error: ' + (err.error || r.statusText));
+      }
+      location.reload();
+    }
+    async function update(id) {
+      const name = prompt('Nuevo nombre (dejar vacío para no cambiar):') || undefined;
+      const phone = prompt('Nuevo teléfono (opcional):') || undefined;
+      const notes = prompt('Nuevas notas (opcional):') || undefined;
+      const r = await fetch(`/api/appointments/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, phone, notes })});
+      if (!r.ok) alert('Error al actualizar');
+      location.reload();
+    }
+    async function remove(id) {
+      if (!confirm('¿Borrar este cliente?')) return;
+      const r = await fetch(`/api/appointments/${id}`, { method: 'DELETE' });
+      if (!r.ok) alert('Error al borrar');
+      location.reload();
+    }
+    document.addEventListener('click', (e) => {
+      const t = e.target;
+      if (!(t instanceof HTMLElement)) return;
+      if (t.hasAttribute('data-add')) {
+        create(t.getAttribute('data-add'));
+      } else if (t.hasAttribute('data-edit')) {
+        update(t.getAttribute('data-edit'));
+      } else if (t.hasAttribute('data-delete')) {
+        remove(t.getAttribute('data-delete'));
+      }
+    });
+    window.printWeek = () => window.print();
+  </script>
+
+  <div class="mt-6 flex gap-2">
+    <button class="btn" onclick="printWeek()">Exportar a PDF</button>
+  </div>
+</BaseLayout>

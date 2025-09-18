@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light dark;
+}
+
+html, body {
+  @apply h-full;
+}
+
+body {
+  @apply bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100;
+}
+
+.container {
+  @apply mx-auto max-w-6xl px-4;
+}
+
+.btn {
+  @apply inline-flex items-center gap-2 rounded-md bg-brand-600 px-3 py-2 text-white hover:bg-brand-700 transition disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-outline {
+  @apply inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800 transition;
+}

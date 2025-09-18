@@ -1,0 +1,26 @@
+---
+import '@/styles/global.css';
+const { title = 'Calendario Farmacia' } = Astro.props;
+---
+<html lang="es" class="h-full">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>{title}</title>
+  </head>
+  <body class="h-full">
+    <header class="border-b border-slate-200 dark:border-slate-800">
+      <div class="container flex items-center justify-between py-3">
+        <a href="/" class="font-semibold">Calendario</a>
+        <nav class="flex gap-2">
+          <a class="btn-outline" href="/">Mes</a>
+          <a class="btn-outline" href="/semana">Semana</a>
+        </nav>
+      </div>
+    </header>
+    <main class="container py-6">
+      <slot />
+    </main>
+  </body>
+</html>

@@ -1,0 +1,22 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import CalendarMonth from '@/components/CalendarMonth.astro';
+import { dayjs } from '@/lib/utils/date';
+const now = dayjs();
+const y = Number(Astro.url.searchParams.get('y') ?? now.year());
+const m0 = Number(Astro.url.searchParams.get('m') ?? now.month());
+
+const monthKey = dayjs().year(y).month(m0).format('YYYY-MM');
+const res = await fetch(`${Astro.url.origin}/api/appointments?month=${monthKey}`);
+const counts = res.ok ? await res.json() : [];
+---
+<BaseLayout title="Calendario mensual">
+  <div class="flex items-center justify-between mb-4">
+    <div class="text-2xl font-bold">{dayjs().year(y).month(m0).format('MMMM YYYY')}</div>
+    <div class="flex gap-2">
+      <a class="btn-outline" href={`/?y=${m0 === 0 ? y - 1 : y}&m=${(m0 + 11) % 12}`}>Anterior</a>
+      <a class="btn-outline" href={`/?y=${m0 === 11 ? y + 1 : y}&m=${(m0 + 1) % 12}`}>Siguiente</a>
+    </div>
+  </div>
+  <CalendarMonth year={y} month0={m0} counts={counts} />
+</BaseLayout>

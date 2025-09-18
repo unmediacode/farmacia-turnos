@@ -1,0 +1,14 @@
+{
+  "functions": {
+    "api/**/*": {
+      "maxDuration": 10
+    }
+  },
+  "installCommand": "npm ci || bun install",
+  "buildCommand": "npm run build || bun run build",
+  "outputDirectory": "dist",
+  "regions": ["fra1"],
+  "env": {
+    "REQUIRE_AUTH": "false"
+  }
+}
