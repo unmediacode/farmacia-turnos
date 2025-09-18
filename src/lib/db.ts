@@ -46,6 +46,9 @@ export function getDb(): Client {
 }
 
 export async function initDb(): Promise<void> {
-  const db = getDb();
-  await db.execute('PRAGMA journal_mode=WAL;');
+  const config = resolveDatabaseConfig();
+  if (config.mode === 'local') {
+    const db = getDb();
+    await db.execute('PRAGMA journal_mode=WAL;');
+  }
 }

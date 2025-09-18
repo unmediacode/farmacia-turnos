@@ -72,10 +72,10 @@ const monthLabel = dayjs(selectedDate).startOf('month').format('MMMM YYYY');
     {weekBundles.map((week) => (
       <section class="space-y-3" aria-label={`Semana del ${formatHuman(week.start)} al ${formatHuman(week.end)}`}>
         <header class="flex items-center justify-between">
-          <h2 class="text-lg font-semibold">
+          <h2 class="text-sm font-semibold text-slate-500">
             Semana del {formatHuman(week.start)} al {formatHuman(week.end)}
           </h2>
-          <span class="text-sm text-slate-500">{week.dates.length} días laborables</span>
+          <span class="text-xs text-slate-400">{week.dates.length} días laborables</span>
         </header>
         <CalendarWeek dateKey={week.start} data={week.data} />
       </section>

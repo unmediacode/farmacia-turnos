@@ -44,6 +44,11 @@ const days = buildWorkWeek(dateKey);
               {appointment.phone && (
                 <div class="text-xs text-slate-500 print:text-[0.65rem]">{appointment.phone}</div>
               )}
+              {appointment.notes && (
+                <div class="rounded bg-amber-100 px-2 py-1 text-xs text-amber-900 shadow-sm dark:bg-amber-900/60 dark:text-amber-200 print:bg-transparent print:text-[0.65rem]">
+                  {appointment.notes}
+                </div>
+              )}
               <div class="mt-2 flex items-center justify-end gap-1 print:hidden">
                 <button class="btn-icon" data-edit={appointment.id} type="button">
                   <span class="sr-only">Editar cita de {appointment.name}</span>
